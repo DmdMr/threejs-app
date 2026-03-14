@@ -16,9 +16,22 @@ hud.innerHTML = `
 `
 document.body.appendChild(hud)
 
+const hud = document.createElement('div')
+hud.className = 'hud'
+hud.innerHTML = `
+  <h1>Solar System</h1>
+  <p>Drag to orbit camera • Scroll to zoom • Right-click to pan</p>
+  <ul>
+    <li>Sun with emissive glow and point light.</li>
+    <li>8 planets with individual orbit speeds.</li>
+    <li>Earth moon + Saturn ring + star field.</li>
+  </ul>
+`
+document.body.appendChild(hud)
+
 const scene = new THREE.Scene()
-scene.background = new THREE.Color(0x090f1f)
-scene.fog = new THREE.Fog(0x090f1f, 25, 85)
+scene.background = new THREE.Color(0x02040b)
+scene.fog = new THREE.Fog(0x02040b, 120, 320)
 
 const camera = new THREE.PerspectiveCamera(
   55,
@@ -26,7 +39,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   250
 )
-camera.position.set(16, 14, 16)
+camera.position.set(0, 42, 88)
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
@@ -35,147 +48,165 @@ renderer.shadowMap.enabled = true
 
 const controls = new OrbitControls(camera, renderer.domElement)
 controls.enableDamping = true
-controls.target.set(0, 3, 0)
-controls.autoRotate = true
-controls.autoRotateSpeed = 0.55
+controls.dampingFactor = 0.05
+controls.target.set(0, 0, 0)
+controls.minDistance = 15
+controls.maxDistance = 240
 
-scene.add(new THREE.AmbientLight(0x9db5ff, 0.32))
+scene.add(new THREE.AmbientLight(0x4a6bb8, 0.14))
 
-const sun = new THREE.DirectionalLight(0xffffff, 1.25)
-sun.position.set(10, 25, 7)
-sun.castShadow = true
-sun.shadow.mapSize.set(1024, 1024)
-sun.shadow.camera.near = 1
-sun.shadow.camera.far = 80
-sun.shadow.camera.left = -24
-sun.shadow.camera.right = 24
-sun.shadow.camera.top = 24
-sun.shadow.camera.bottom = -24
-scene.add(sun)
+const sunLight = new THREE.PointLight(0xfff2cf, 2.2, 420)
+sunLight.castShadow = true
+sunLight.shadow.mapSize.set(1024, 1024)
+scene.add(sunLight)
 
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(70, 70),
+const sun = new THREE.Mesh(
+  new THREE.SphereGeometry(8, 48, 48),
   new THREE.MeshStandardMaterial({
-    color: 0x141c31,
-    roughness: 0.98,
-    metalness: 0.04,
+    color: 0xffb347,
+    emissive: 0xff9b29,
+    emissiveIntensity: 1.6,
+    roughness: 0.9,
+    metalness: 0.02,
   })
 )
-ground.rotation.x = -Math.PI / 2
-ground.receiveShadow = true
-scene.add(ground)
+sun.castShadow = false
+scene.add(sun)
 
-const grid = new THREE.GridHelper(42, 42, 0x46537c, 0x303b5f)
-grid.position.y = 0.001
-scene.add(grid)
+const starGeometry = new THREE.BufferGeometry()
+const starCount = 2200
+const starPositions = new Float32Array(starCount * 3)
+for (let i = 0; i < starCount; i += 1) {
+  const radius = THREE.MathUtils.randFloat(160, 520)
+  const theta = THREE.MathUtils.randFloat(0, Math.PI * 2)
+  const phi = Math.acos(THREE.MathUtils.randFloatSpread(2))
+  const x = radius * Math.sin(phi) * Math.cos(theta)
+  const y = radius * Math.cos(phi)
+  const z = radius * Math.sin(phi) * Math.sin(theta)
 
-const cubeSize = 1
-const halfCube = cubeSize / 2
-const gravity = 34
-const spawnY = 30
-const maxFalling = 70
-const maxSettled = 700
-const worldRadius = 10
-const spawnEvery = 0.06
-
-const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize)
-const cubeMaterial = new THREE.MeshStandardMaterial({
-  color: 0x76a8ff,
-  roughness: 0.34,
-  metalness: 0.2,
-})
-
-const settledCubes = []
-const fallingCubes = []
-const columnHeights = new Map()
-
-function gridKey(gx, gz) {
-  return `${gx},${gz}`
+  starPositions[i * 3] = x
+  starPositions[i * 3 + 1] = y
+  starPositions[i * 3 + 2] = z
 }
+starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3))
 
-function worldFromGrid(gx, gz) {
-  return new THREE.Vector3(gx * cubeSize, 0, gz * cubeSize)
-}
-
-function spawnCube() {
-  if (fallingCubes.length >= maxFalling) return
-
-  const gx = THREE.MathUtils.randInt(-worldRadius, worldRadius)
-  const gz = THREE.MathUtils.randInt(-worldRadius, worldRadius)
-  const position = worldFromGrid(gx, gz)
-
-  const mesh = new THREE.Mesh(cubeGeometry, cubeMaterial.clone())
-  mesh.material.color.setHSL(0.55 + Math.random() * 0.13, 0.78, 0.62)
-  mesh.castShadow = true
-  mesh.receiveShadow = true
-  mesh.position.set(position.x, spawnY + Math.random() * 6, position.z)
-
-  scene.add(mesh)
-
-  fallingCubes.push({
-    mesh,
-    gx,
-    gz,
-    vy: 0,
-    spinX: THREE.MathUtils.randFloatSpread(0.03),
-    spinY: THREE.MathUtils.randFloatSpread(0.03),
+const stars = new THREE.Points(
+  starGeometry,
+  new THREE.PointsMaterial({
+    color: 0xb9d3ff,
+    size: 0.7,
+    sizeAttenuation: true,
   })
+)
+scene.add(stars)
+
+const orbitMaterial = new THREE.LineBasicMaterial({
+  color: 0x2d3f65,
+  transparent: true,
+  opacity: 0.55,
+})
+const orbitTrail = new THREE.Mesh(trailGeometry, trailMaterial)
+orbitTrail.rotation.x = Math.PI / 2
+scene.add(orbitTrail)
+
+function makeOrbit(radius) {
+  const points = []
+  for (let i = 0; i <= 96; i += 1) {
+    const angle = (i / 96) * Math.PI * 2
+    points.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius))
+  }
+  const geometry = new THREE.BufferGeometry().setFromPoints(points)
+  return new THREE.LineLoop(geometry, orbitMaterial)
 }
 
-function settleCube(cube) {
-  const key = gridKey(cube.gx, cube.gz)
-  const currentHeight = columnHeights.get(key) ?? 0
-  const targetY = currentHeight + halfCube
+const planetSpecs = [
+  { name: 'Mercury', size: 1.0, orbit: 12, orbitSpeed: 1.7, rotationSpeed: 0.01, color: 0xb8a88f },
+  { name: 'Venus', size: 1.5, orbit: 18, orbitSpeed: 1.2, rotationSpeed: 0.008, color: 0xd2a771 },
+  { name: 'Earth', size: 1.6, orbit: 24, orbitSpeed: 1, rotationSpeed: 0.02, color: 0x4e85ff },
+  { name: 'Mars', size: 1.2, orbit: 31, orbitSpeed: 0.8, rotationSpeed: 0.018, color: 0xc06745 },
+  { name: 'Jupiter', size: 4.2, orbit: 43, orbitSpeed: 0.43, rotationSpeed: 0.03, color: 0xc59d76 },
+  { name: 'Saturn', size: 3.6, orbit: 56, orbitSpeed: 0.33, rotationSpeed: 0.024, color: 0xd5c08b },
+  { name: 'Uranus', size: 2.6, orbit: 68, orbitSpeed: 0.25, rotationSpeed: 0.02, color: 0x88d2de },
+  { name: 'Neptune', size: 2.5, orbit: 80, orbitSpeed: 0.2, rotationSpeed: 0.021, color: 0x5472ff },
+]
 
-  cube.mesh.position.y = targetY
-  cube.mesh.rotation.x = 0
-  cube.mesh.rotation.z = 0
+const planets = []
 
-  columnHeights.set(key, currentHeight + cubeSize)
-  settledCubes.push(cube.mesh)
+for (const spec of planetSpecs) {
+  const pivot = new THREE.Group()
+  scene.add(pivot)
 
-  if (settledCubes.length > maxSettled) {
-    const oldest = settledCubes.shift()
-    if (oldest) {
-      scene.remove(oldest)
-      oldest.material.dispose()
-    }
+  const planet = new THREE.Mesh(
+    new THREE.SphereGeometry(spec.size, 32, 32),
+    new THREE.MeshStandardMaterial({
+      color: spec.color,
+      roughness: 0.85,
+      metalness: 0.08,
+    })
+  )
+  planet.position.x = spec.orbit
+  planet.castShadow = true
+  planet.receiveShadow = true
+  pivot.add(planet)
+
+  const orbit = makeOrbit(spec.orbit)
+  scene.add(orbit)
+
+  planets.push({ pivot, planet, spec })
+
+  if (spec.name === 'Earth') {
+    const moonPivot = new THREE.Group()
+    planet.add(moonPivot)
+
+    const moon = new THREE.Mesh(
+      new THREE.SphereGeometry(0.46, 20, 20),
+      new THREE.MeshStandardMaterial({ color: 0xb8bfd3, roughness: 0.92, metalness: 0.02 })
+    )
+    moon.position.x = 3.2
+    moon.castShadow = true
+    moonPivot.add(moon)
+
+    planets.push({
+      pivot: moonPivot,
+      planet: moon,
+      spec: { orbitSpeed: 4.8, rotationSpeed: 0.015 },
+    })
+  }
+
+  if (spec.name === 'Saturn') {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(spec.size * 1.35, spec.size * 2.15, 64),
+      new THREE.MeshStandardMaterial({
+        color: 0xb7a27c,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.72,
+        roughness: 0.95,
+        metalness: 0.04,
+      })
+    )
+    ring.rotation.x = Math.PI / 2.45
+    planet.add(ring)
   }
 }
 
-let spawnTimer = 0
 const clock = new THREE.Clock()
-
-function updateRain(delta) {
-  spawnTimer += delta
-  while (spawnTimer >= spawnEvery) {
-    spawnCube()
-    spawnTimer -= spawnEvery
-  }
-
-  for (let i = fallingCubes.length - 1; i >= 0; i -= 1) {
-    const cube = fallingCubes[i]
-    cube.vy -= gravity * delta
-    cube.mesh.position.y += cube.vy * delta
-    cube.mesh.rotation.x += cube.spinX
-    cube.mesh.rotation.y += cube.spinY
-
-    const key = gridKey(cube.gx, cube.gz)
-    const currentHeight = columnHeights.get(key) ?? 0
-    const collisionY = currentHeight + halfCube
-
-    if (cube.mesh.position.y <= collisionY) {
-      settleCube(cube)
-      fallingCubes.splice(i, 1)
-    }
-  }
-}
 
 function animate() {
   requestAnimationFrame(animate)
 
   const delta = Math.min(clock.getDelta(), 0.033)
-  updateRain(delta)
+  const elapsed = clock.getElapsedTime()
+
+  sun.rotation.y += 0.0035
+  sunLight.position.copy(sun.position)
+
+  for (const item of planets) {
+    item.pivot.rotation.y += item.spec.orbitSpeed * delta * 0.35
+    item.planet.rotation.y += item.spec.rotationSpeed
+  }
+
+  stars.rotation.y = elapsed * 0.008
   controls.update()
   renderer.render(scene, camera)
 }
@@ -186,75 +217,5 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 })
-const orbitTrail = new THREE.Mesh(trailGeometry, trailMaterial)
-orbitTrail.rotation.x = Math.PI / 2
-scene.add(orbitTrail)
-
-const balls = []
-const gravity = -12
-
-for (let i = 0; i < 6; i += 1) {
-  const radius = 0.23 + Math.random() * 0.18
-  const ball = new THREE.Mesh(
-    new THREE.SphereGeometry(radius, 20, 20),
-    new THREE.MeshStandardMaterial({
-      color: new THREE.Color().setHSL(0.55 + Math.random() * 0.25, 0.78, 0.58),
-      metalness: 0.15,
-      roughness: 0.45,
-    })
-  )
-
-  ball.castShadow = true
-  ball.position.set(
-    (Math.random() - 0.5) * 7,
-    Math.random() * 5 + 2,
-    (Math.random() - 0.5) * 7
-  )
-
-  scene.add(ball)
-  balls.push({
-    mesh: ball,
-    radius,
-    velocity: new THREE.Vector3(
-      (Math.random() - 0.5) * 2.7,
-      Math.random() * 1.6,
-      (Math.random() - 0.5) * 2.7
-    ),
-  })
-}
-
-const bounds = 9
-const restitution = 0.72
-const friction = 0.985
-
-const clock = new THREE.Clock()
-
-function stepPhysics(delta) {
-  for (const body of balls) {
-    body.velocity.y += gravity * delta
-    body.mesh.position.addScaledVector(body.velocity, delta)
-
-    if (body.mesh.position.y - body.radius <= -2) {
-      body.mesh.position.y = -2 + body.radius
-      body.velocity.y *= -restitution
-      body.velocity.x *= friction
-      body.velocity.z *= friction
-    }
-
-    if (Math.abs(body.mesh.position.x) + body.radius >= bounds) {
-      body.mesh.position.x = Math.sign(body.mesh.position.x) * (bounds - body.radius)
-      body.velocity.x *= -restitution
-    }
-
-    if (Math.abs(body.mesh.position.z) + body.radius >= bounds) {
-      body.mesh.position.z = Math.sign(body.mesh.position.z) * (bounds - body.radius)
-      body.velocity.z *= -restitution
-    }
-  }
-}
-
-for (let i = 0; i < 18; i += 1) {
-  spawnCube()
-}
 
 animate()
