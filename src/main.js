@@ -3,6 +3,18 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
 const canvas = document.querySelector('#bg')
+const hud = document.createElement('div')
+hud.className = 'hud'
+hud.innerHTML = `
+  <h1>Three.js Playground</h1>
+  <p>Ideas you can build next:</p>
+  <ul>
+    <li>Swap the cube for a glTF model (character, car, room).</li>
+    <li>Add camera controls, postprocessing bloom, and particles.</li>
+    <li>Plug in real physics with cannon-es or rapier.</li>
+  </ul>
+`
+document.body.appendChild(hud)
 
 const hud = document.createElement('div')
 hud.className = 'hud'
@@ -25,7 +37,7 @@ const camera = new THREE.PerspectiveCamera(
   55,
   window.innerWidth / window.innerHeight,
   0.1,
-  1000
+  250
 )
 camera.position.set(0, 42, 88)
 
@@ -93,6 +105,9 @@ const orbitMaterial = new THREE.LineBasicMaterial({
   transparent: true,
   opacity: 0.55,
 })
+const orbitTrail = new THREE.Mesh(trailGeometry, trailMaterial)
+orbitTrail.rotation.x = Math.PI / 2
+scene.add(orbitTrail)
 
 function makeOrbit(radius) {
   const points = []
